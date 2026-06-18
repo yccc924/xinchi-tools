@@ -1,0 +1,28 @@
+# 敏感設定（含 API Key）
+整合app/config.json
+blog-generator/.env
+
+# Python 虛擬環境
+整合app/venv/
+blog-generator/venv/
+
+# 生成輸出
+整合app/output/
+blog-generator/output/
+
+# 已處理紀錄
+整合app/done.txt
+blog-generator/done.txt
+
+# 開發參考（不需包含）
+blog-generator 範例/
+
+# 商品圖片
+自動製作圖片/input/
+自動製作圖片/output/
+
+# Python 快取
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store

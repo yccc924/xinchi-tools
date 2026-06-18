@@ -1,0 +1,49 @@
+name: Daily Blog Generator
+
+on:
+  schedule:
+    # UTC 00:00 = 台灣時間 08:00
+    - cron: "0 0 * * *"
+  workflow_dispatch:  # 允許手動觸發
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 允許 commit done.txt 回 repo
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run blog generator
+        env:
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MODEL: ${{ vars.MODEL || 'mistralai/mistral-large-3-675b' }}
+        run: python main.py
+
+      - name: Commit done.txt and prompt.md
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add done.txt prompt.md
+          git diff --staged --quiet || git commit -m "chore: update done.txt [skip ci]"
+          git push

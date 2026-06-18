@@ -1,0 +1,8 @@
+{
+  "excel_path": "",
+  "nvidia_api_key": "your_nvidia_api_key_here",
+  "nvidia_base_url": "https://integrate.api.nvidia.com/v1",
+  "model": "mistralai/mistral-large-3-675b",
+  "telegram_bot_token": "your_telegram_bot_token",
+  "telegram_chat_id": "your_telegram_chat_id"
+}

@@ -1,0 +1,207 @@
+<!-- 將此 <style> 標籤與下方的 <div class="article-content"> 一起複製到 CKEditor 的原始碼模式中 -->
+<style type="text/css">/* --- 文章與表格樣式 --- */
+/*
+  備註：
+  1. 這些樣式會被限制在 .article-content 這個 class 內。
+  2. 您可以根據您網站的整體風格，微調顏色、字體大小等。
+*/
+
+/* --- 文章基本樣式 (微調) --- */
+.article-content {
+    /* 這些佈局樣式可能由您的網站主題控制，這裡保留是為了確保在編輯器中預覽效果 */
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 1px 15px; /* 增加 1px padding 避免 margin collapse */
+}
+
+.article-content p {
+    line-height: 2.0;
+    margin: 16px 0;
+}
+
+.article-content ul {
+    padding-left: 20px;
+}
+
+.article-content li {
+    margin-bottom: 10px;
+    line-height: 1.8;
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    font-size: 22px;
+    font-weight: 700;
+    margin-top: 40px;
+    margin-bottom: 20px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.highlight-title {
+    background-color: #f8f9fa;
+    border-left: 4px solid #ffa500;
+    border-radius: 6px;
+    padding: 12px 18px;
+    font-weight: bold;
+    font-size: 18px;
+    color: #1d1d1f;
+    margin: 24px 0;
+}
+
+/* --- 全新設計的表格樣式 (恢復上一版設計並調整文字排版) --- */
+.spec-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2.5rem auto;
+    font-size: 1rem;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
+    border: 1px solid #dee2e6;
+}
+
+.spec-table thead {
+    background-color: #f8f9fa;
+    color: #495057;
+}
+
+.spec-table th {
+    padding: 1.25rem 1rem;
+    font-weight: 700;
+    text-align: left; /* 修改：標題全部靠左對齊 */
+    font-size: 0.9rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.spec-table td {
+    padding: 1.25rem 1rem;
+    text-align: left; /* 修改：內文全部靠左對齊 */
+    border-top: 1px solid #dee2e6;
+    color: #495057;
+    transition: background-color 0.3s ease;
+}
+
+.spec-table tbody tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+.spec-table tbody tr:hover {
+    background-color: #e9ecef;
+}
+
+.spec-table th:first-child,
+.spec-table td:first-child {
+    width: 20%; /* 增加第一欄寬度以修正文字排版 */
+}
+
+.spec-table td:first-child {
+    font-weight: 500;
+    color: #1d1d1f;
+}
+
+.spec-table b, .spec-table strong {
+    color: #ffa500;
+    font-weight: 700;
+}
+.section-title {
+  display: flex;
+  align-items: center;
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 28px;
+  margin-bottom: 16px;
+}
+
+.section-title::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 20px;
+  background-color: #ffa500; /* 品牌橘色 */
+  margin-right: 10px;
+  border-radius: 2px;
+}
+
+.screenshot-methods-box {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  padding: 1em 1.2em;
+  border-radius: 6px;
+  margin: 20px 0;
+  font-size: 1em;
+  line-height: 1.8;
+  box-sizing: border-box;
+}
+.screenshot-methods-box {
+  display: inline-block; /* 重點：讓框只包住內容 */
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  padding: 1em 1.2em;
+  border-radius: 6px;
+  font-size: 1em;
+  line-height: 1.8;
+  box-sizing: border-box;
+}
+
+/* --- 手機版響應式設計 (寬度小於 768px 時觸發) --- */
+@media screen and (max-width: 768px) {
+    .article-content {
+        padding: 1px 5px;
+    }
+
+    .section-title {
+        font-size: 20px;
+    }
+
+    /* --- 表格手機版樣式 (改為水平滾動) --- */
+    .spec-table {
+        display: block;
+        width: 100%;
+        overflow-x: auto; /* 啟用水平滾動 */
+        -webkit-overflow-scrolling: touch; /* iOS 平滑滾動 */
+        
+        /* 在滾動容器上調整樣式，以獲得更好的視覺效果 */
+        border-radius: 0;
+        box-shadow: none;
+        border-left: none;
+        border-right: none;
+    }
+
+    /* 為了避免文字被過度壓縮，為儲存格設定最小寬度 */
+    .spec-table th, 
+    .spec-table td {
+        min-width: 140px; /* 設定一個合理的最小寬度 */
+        white-space: normal; /* 讓儲存格內的文字可以正常換行 */
+    }
+    
+    /* 將第一欄（功能/型號）固定，方便使用者左右滑動時對照 */
+    .spec-table th:first-child, 
+    .spec-table td:first-child {
+        width: auto; /* 在手機版取消固定寬度，讓 min-width 生效 */
+        min-width: 120px;
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        /* 確保固定欄有背景色，才不會被後方內容透出 */
+        background-color: #ffffff; 
+    }
+    
+    /* 表頭的第一欄也要有背景色 */
+    .spec-table thead th:first-child {
+        background-color: #f8f9fa;
+    }
+
+    /* 確保斑馬紋樣式在固定欄上也能正確顯示 */
+    .spec-table tbody tr:nth-child(even) td:first-child {
+        background-color: #f8f9fa;
+    }
+    
+    /* 確保滑鼠懸停效果在固定欄上也能正常顯示 */
+    .spec-table tbody tr:hover td:first-child {
+        background-color: #e9ecef;
+    }
+}
+</style>
