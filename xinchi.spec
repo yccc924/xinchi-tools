@@ -1,7 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-#
-# PyInstaller spec for 炘馳工具箱 (xinchi)
-# Run from repo root:  pyinstaller xinchi.spec
+# pyinstaller xinchi.spec  (run from repo root)
+import os, sys as _sys
+os.environ.setdefault('PYTHONUTF8', '1')
+os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
 #
 # blog-generator/ and 價格檢查/ are NOT bundled into the exe;
 # they ship as side-by-side folders next to xinchi.exe so that
