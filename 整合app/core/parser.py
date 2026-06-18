@@ -33,7 +33,7 @@ def parse_one(text: str) -> dict:
     first = lines[0]
     full  = '\n'.join(lines)
 
-    m = re.search(r'電池[健康度]*\s*[:：]?\s*(\d+)\s*%?', first, re.IGNORECASE)
+    m = re.search(r'電池(?:容量|健康度)?\s*[:：]?\s*(\d+)\s*%?', first, re.IGNORECASE)
     if m:
         out['battery'] = m.group(1)
     m = re.search(r'#\s*(\w+)', first)
@@ -60,7 +60,8 @@ def parse_one(text: str) -> dict:
                 out['warranty'] = m.group(1)
 
     clean = first
-    for pat in [r'電池[健康度]*\s*[:：]?\s*\d+\s*%?(?:\s*[（(]\d+[）)])?',
+    for pat in [r'電池(?:容量|健康度)?\s*[:：]?\s*\d+\s*%?(?:\s*[（(][^）)]*[）)])?',
+                r'[（(][^（(）)]*[）)]',   # 清除所有 （...） 括號內容（電池循環次數等）
                 r'#\s*\w+', r'\d+\s*[GT]B', r'\$[\d,]+',
                 r'有盒|無盒|原廠盒|全配', r'(?:原廠)?保固[\d/\-]*',
                 r'\d+\s*(?:天|個月|月|年)', r'原廠', r'\b0\b']:
