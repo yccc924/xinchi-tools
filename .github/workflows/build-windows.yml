@@ -34,11 +34,11 @@ jobs:
 
       - name: Install Playwright browsers
         shell: pwsh
-        run: playwright install chromium
+        run: python -m playwright install chromium
 
       - name: Build EXE
         shell: pwsh
-        run: pyinstaller xinchi.spec
+        run: pyinstaller --noconfirm xinchi.spec
 
       - name: Create distribution package
         shell: pwsh
