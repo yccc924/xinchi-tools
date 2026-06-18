@@ -18,7 +18,10 @@ from core.shortcuts import attach
 import core.config as cfg
 
 SUPPORTED  = {'.jpg', '.jpeg', '.png', '.webp', '.avif'}
-OUTPUT_DIR = Path(__file__).parent.parent / 'output'
+if getattr(sys, 'frozen', False):
+    OUTPUT_DIR = Path(sys.executable).parent / 'output'
+else:
+    OUTPUT_DIR = Path(__file__).parent.parent / 'output'
 
 
 def _pbcopy(text: str):
