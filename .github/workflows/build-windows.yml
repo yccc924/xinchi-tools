@@ -1,0 +1,75 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '整合app/**'
+      - 'blog-generator/main.py'
+      - 'blog-generator/config.py'
+      - '價格檢查/price_checker.py'
+      - 'xinchi.spec'
+      - '.github/workflows/build-windows.yml'
+  workflow_dispatch:    # 可手動在 GitHub 網頁上觸發
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r 整合app/requirements.txt
+
+      - name: Install Playwright browsers
+        shell: pwsh
+        run: playwright install chromium
+
+      - name: Build EXE
+        shell: pwsh
+        run: pyinstaller xinchi.spec
+
+      - name: Create distribution package
+        shell: pwsh
+        run: |
+          $out = "xinchi-release"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+          # main exe
+          Copy-Item dist/xinchi.exe $out/
+
+          # blog-generator (source scripts + static files only, no venv/output/.env)
+          $bgDst = "$out/blog-generator"
+          New-Item -ItemType Directory -Force -Path $bgDst | Out-Null
+          foreach ($f in @("main.py","config.py","style.css","requirements.txt")) {
+            if (Test-Path "blog-generator/$f") { Copy-Item "blog-generator/$f" $bgDst/ }
+          }
+          foreach ($f in @("prompt.md","tone_samples.txt","article_samples.txt")) {
+            if (Test-Path "blog-generator/$f") { Copy-Item "blog-generator/$f" $bgDst/ }
+          }
+
+          # 價格檢查 (source scripts only)
+          $pcDst = "$out/價格檢查"
+          New-Item -ItemType Directory -Force -Path $pcDst | Out-Null
+          Get-ChildItem "價格檢查/*.py" | ForEach-Object { Copy-Item $_.FullName $pcDst/ }
+
+          # zip it
+          Compress-Archive -Path "$out/*" -DestinationPath "xinchi-windows.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xinchi-windows
+          path: xinchi-windows.zip
+          retention-days: 30

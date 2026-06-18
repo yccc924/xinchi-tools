@@ -165,7 +165,10 @@ class PriceCheckPage(tk.Frame):
         self._log.configure(state='disabled')
 
     def _run(self, excel_path: str):
-        checker_dir = Path(__file__).parent.parent.parent / '價格檢查'
+        if getattr(sys, 'frozen', False):
+            checker_dir = Path(sys.executable).parent / '價格檢查'
+        else:
+            checker_dir = Path(__file__).parent.parent.parent / '價格檢查'
         if str(checker_dir) not in sys.path:
             sys.path.insert(0, str(checker_dir))
 

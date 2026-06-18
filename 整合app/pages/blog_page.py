@@ -1,3 +1,4 @@
+import sys
 import threading
 import tkinter as tk
 from pathlib import Path
@@ -24,6 +25,11 @@ class BlogPage(tk.Frame):
         self._current_idx: int = -1
         self._blog_dir: Path | None = None
         self._build()
+
+    def _get_blog_dir(self) -> Path:
+        if getattr(sys, 'frozen', False):
+            return Path(sys.executable).parent / 'blog-generator'
+        return Path(__file__).resolve().parent.parent.parent / 'blog-generator'
 
     def on_config_update(self, config: dict):
         pass
@@ -276,12 +282,13 @@ class BlogPage(tk.Frame):
         cms_html = art.get('content', '')
 
         try:
-            import sys, glob as _glob
-            _venv = Path(__file__).resolve().parent.parent / 'venv'
-            for _pat in ['lib/python*/site-packages', 'Lib/site-packages']:
-                for _sp in _glob.glob(str(_venv / _pat)):
-                    if _sp not in sys.path:
-                        sys.path.insert(0, _sp)
+            import glob as _glob
+            if not getattr(sys, 'frozen', False):
+                _venv = Path(__file__).resolve().parent.parent / 'venv'
+                for _pat in ['lib/python*/site-packages', 'Lib/site-packages']:
+                    for _sp in _glob.glob(str(_venv / _pat)):
+                        if _sp not in sys.path:
+                            sys.path.insert(0, _sp)
             from tkinterweb import HtmlFrame
         except ImportError:
             _pip = r'venv\Scripts\pip' if sys.platform == 'win32' else 'venv/bin/pip'
@@ -289,7 +296,7 @@ class BlogPage(tk.Frame):
             return
 
         # 包進完整 HTML 文件並載入 style.css
-        blog_dir = Path(__file__).resolve().parent.parent.parent / 'blog-generator'
+        blog_dir = self._get_blog_dir()
         css_file = blog_dir / 'style.css'
         css_raw  = css_file.read_text(encoding='utf-8') if css_file.exists() else ''
         full_html = f"""<!DOCTYPE html>
@@ -338,7 +345,7 @@ class BlogPage(tk.Frame):
 
     def _load_history(self):
         """掃描 blog-generator/output 載入所有已生成的 HTML 檔案。"""
-        blog_dir  = Path(__file__).resolve().parent.parent.parent / 'blog-generator'
+        blog_dir  = self._get_blog_dir()
         output_dir = blog_dir / 'output'
         if not output_dir.exists():
             self._history_articles = []
@@ -415,7 +422,7 @@ class BlogPage(tk.Frame):
     # ── done.txt 路徑 ────────────────────────────────────────────────────────
 
     def _done_txt_path(self) -> Path:
-        return Path(__file__).resolve().parent.parent.parent / 'blog-generator' / 'done.txt'
+        return self._get_blog_dir() / 'done.txt'
 
     # ── 開始/停止生成 ────────────────────────────────────────────────────────
 
@@ -426,8 +433,8 @@ class BlogPage(tk.Frame):
             return
 
         config = cfg.load()
-        if not config.get('nvidia_api_key'):
-            messagebox.showwarning('提醒', '請先到「設定」填入 NVIDIA API Key')
+        if not config.get('nvidia_api_key') and not config.get('gemini_api_key'):
+            messagebox.showwarning('提醒', '請先到「設定」填入 Gemini 或 NVIDIA API Key')
             return
 
         self._running = True
@@ -479,7 +486,7 @@ class BlogPage(tk.Frame):
 
     def _load_articles_from_output(self, output_dir: Path, filenames: list[str],
                                     meta: dict = None):
-        blog_dir = Path(__file__).resolve().parent.parent.parent / 'blog-generator'
+        blog_dir = self._get_blog_dir()
         css_file = blog_dir / 'style.css'
         css = css_file.read_text(encoding='utf-8') if css_file.exists() else ''
 
@@ -534,21 +541,21 @@ class BlogPage(tk.Frame):
     # ── 主生成邏輯 ───────────────────────────────────────────────────────────
 
     def _run_blog(self):
-        import sys
         import logging
         import os
         import time
 
-        blog_dir = Path(__file__).resolve().parent.parent.parent / 'blog-generator'
+        blog_dir = self._get_blog_dir()
         self._blog_dir = blog_dir
 
         if str(blog_dir) not in sys.path:
             sys.path.insert(0, str(blog_dir))
-        import glob as _glob
-        for _pat in ['venv/lib/python*/site-packages', 'venv/Lib/site-packages']:
-            for _sp in _glob.glob(str(blog_dir / _pat)):
-                if _sp not in sys.path:
-                    sys.path.insert(1, _sp)
+        if not getattr(sys, 'frozen', False):
+            import glob as _glob
+            for _pat in ['venv/lib/python*/site-packages', 'venv/Lib/site-packages']:
+                for _sp in _glob.glob(str(blog_dir / _pat)):
+                    if _sp not in sys.path:
+                        sys.path.insert(1, _sp)
 
         self._log_write('▶ 初始化…')
 

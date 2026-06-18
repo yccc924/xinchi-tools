@@ -21,6 +21,11 @@ blog-generator 範例/
 自動製作圖片/input/
 自動製作圖片/output/
 
+# PyInstaller build artifacts
+dist/
+build/
+*.spec.bak
+
 # Python 快取
 __pycache__/
 *.pyc
