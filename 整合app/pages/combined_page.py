@@ -40,6 +40,7 @@ class CombinedPage(tk.Frame):
         self._images: list[Path] = []
         self._price_db: dict     = {}
         self._warranty_keys: set = set()
+        self._worker_running     = False
         self._build()
         if config.get('excel_path') and Path(config['excel_path']).exists():
             self._do_load_excel(config['excel_path'])
@@ -244,9 +245,9 @@ class CombinedPage(tk.Frame):
     # ── 產生 ─────────────────────────────────────────────────────────────
 
     def _run(self):
-        # 防止重複觸發（按鈕 disabled 時仍可能被快捷鍵呼叫）
-        if self._btn_run.cget('state') == 'disabled':
+        if self._worker_running:
             return
+        self._worker_running = True
 
         raw_text = self._txt.get('1.0', 'end').strip()
         if not raw_text:
@@ -287,7 +288,7 @@ class CombinedPage(tk.Frame):
                 if price_db:
                     header    = raw_block.split('\n')[0]
                     model_key = detect_model(header, price_db)
-                    cap_key   = re.sub(r'B$', '', data['capacity'], flags=re.IGNORECASE)
+                    cap_key   = re.sub(r'B$', '', data['capacity'].split('/')[-1], flags=re.IGNORECASE)
                     price     = lookup_price(price_db, war_keys,
                                              model_key, cap_key,
                                              data['battery'], raw_block)
@@ -337,6 +338,7 @@ class CombinedPage(tk.Frame):
 
     def _on_done(self, result_text: str, done: int, err: int, has_price: bool):
         """主執行緒回呼：背景執行緒全部完成後更新 UI。"""
+        self._worker_running = False
         try:
             if not self.winfo_exists():
                 return

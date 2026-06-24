@@ -1,10 +1,7 @@
 import re
 
-_COLORS = [
-    '深空黑', '黑色鈦金屬', '白色鈦金屬', '原色鈦金屬', '自然鈦金屬',
-    '星光色', '午夜色', '黑色', '白色', '藍色', '紅色', '綠色',
-    '紫色', '金色', '銀色', '灰色', '粉色', '黃色',
-]
+# CJK Unicode ranges — explicit hex (reliable on Windows, unlike [一-鿿])
+_CJK = r'[一-鿿㐀-䶿豈-﫿]'
 
 
 def _auto_warranty(model: str) -> str:
@@ -32,21 +29,30 @@ def parse_one(text: str) -> dict:
 
     first = lines[0]
     full  = '\n'.join(lines)
+    work  = first  # mutable working copy of first line
 
-    m = re.search(r'電池(?:容量|健康度)?\s*[:：]?\s*(\d+)\s*%?', first, re.IGNORECASE)
-    if m:
-        out['battery'] = m.group(1)
-    m = re.search(r'#\s*(\w+)', first)
+    # ── 1. Serial: #英數字 ────────────────────────────────────────────────
+    m = re.search(r'#\s*([A-Za-z0-9]+)', work)
     if m:
         out['serial'] = m.group(1)
-    m = re.search(r'(\d+\s*[GT]B)', first, re.IGNORECASE)
-    if m:
-        out['capacity'] = m.group(1).upper().replace(' ', '')
-    for c in _COLORS:
-        if c in first:
-            out['color'] = c
-            break
+        work = (work[:m.start()] + work[m.end():]).strip()
 
+    # ── 2. Battery: 電池[容量|健康度]?數字% + strip trailing brackets ──────
+    m = re.search(
+        r'電池(?:容量|健康度)?\s*[:：]?\s*(\d+)\s*%?'
+        r'(?:\s*[（(][^）)]*[）)])?',
+        work, re.IGNORECASE)
+    if m:
+        out['battery'] = m.group(1)
+        work = (work[:m.start()] + work[m.end():]).strip()
+
+    # ── 3. Remove any remaining parentheticals (e.g. standalone cycle counts)
+    work = re.sub(r'[（(][^）)]*[）)]', '', work).strip()
+
+    # ── 4. Remove box info (not shown on image) ───────────────────────────
+    work = re.sub(r'有盒|無盒|原廠盒|全配', '', work)
+
+    # ── 5. Warranty (search full text; clean tokens from work) ────────────
     m = re.search(r'保固\s*(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})', full)
     if m:
         out['warranty'] = f"保固{m.group(1)}{int(m.group(2)):02d}{int(m.group(3)):02d}"
@@ -59,27 +65,52 @@ def parse_one(text: str) -> dict:
             if m:
                 out['warranty'] = m.group(1)
 
-    clean = first
-    for pat in [r'電池(?:容量|健康度)?\s*[:：]?\s*\d+\s*%?(?:\s*[（(][^）)]*[）)])?',
-                r'[（(][^（(）)]*[）)]',   # 清除所有 （...） 括號內容（電池循環次數等）
-                r'#\s*\w+', r'\d+\s*[GT]B', r'\$[\d,]+',
-                r'有盒|無盒|原廠盒|全配', r'(?:原廠)?保固[\d/\-]*',
-                r'\d+\s*(?:天|個月|月|年)', r'原廠', r'\b0\b']:
-        clean = re.sub(pat, '', clean, flags=re.IGNORECASE)
-    if out['color']:
-        clean = clean.replace(out['color'], '')
-    try:
-        clean = re.sub(r'[一-鿿㐀-䶿＀-￯]+', '', clean)
-    except re.error as _e:
-        print(f"[parser] 警告：Unicode 中文字元正規式失敗（{_e}），跳過此過濾步驟，保留原文")
+    work = re.sub(r'(?:原廠)?保固[\d/\-]*', '', work)
+    work = re.sub(r'\d+\s*(?:天|個月|月|年)', '', work)
+    work = re.sub(r'原廠', '', work)
+    work = re.sub(r'\$[\d,]+', '', work)
+    work = re.sub(r'\s+', ' ', work).strip()
 
-    clean = re.sub(r'[^\w\s]', ' ', clean)
-    clean = re.sub(r'\b\d{3,}\b', '', clean)
-    out['model'] = ' '.join(clean.split())
+    # ── 6. Color: last Chinese cluster remaining in work ──────────────────
+    chi = list(re.finditer(_CJK + '+', work))
+    if chi:
+        last = chi[-1]
+        out['color'] = last.group()
+        work = (work[:last.start()] + work[last.end():]).strip()
+
+    work = re.sub(r'\s+', ' ', work).strip()
+
+    # ── 7. Remaining = model + capacity title; uppercase ──────────────────
+    title = work.upper()
+
+    # ── 8. Extract capacity from title ───────────────────────────────────
+    # Handles: 128GB, 8/256GB, 256G→256GB, 256T→256TB
+    # Pattern matches X/256GB (RAM/Storage) or plain 128GB
+    cap_m = list(re.finditer(r'(\d+(?:/\d+)?)\s*(GB|TB|G\b|T\b)', title, re.IGNORECASE))
+    if cap_m:
+        last_c = cap_m[-1]
+        num  = last_c.group(1)   # e.g. '8/256' or '128'
+        unit = last_c.group(2).upper()
+        if unit == 'G':
+            unit = 'GB'
+        elif unit == 'T':
+            unit = 'TB'
+        out['capacity'] = num + unit                         # '8/256GB' or '128GB'
+        out['model']    = title[:last_c.start()].strip()    # everything before capacity
+    else:
+        # Fallback: lone B suffix (typo for GB), e.g. 256B → 256GB
+        cap_b = list(re.finditer(r'(\d+)\s*B\b', title))
+        if cap_b:
+            last_c = cap_b[-1]
+            out['capacity'] = last_c.group(1) + 'GB'
+            out['model']    = re.sub(r'\s*\d+\s*B\b', '', title).strip()
+        else:
+            out['model'] = title
 
     if not out['warranty']:
         out['warranty'] = _auto_warranty(out['model'])
 
+    # ── 9. Condition ──────────────────────────────────────────────────────
     parts = []
     box = re.search(r'(有盒|無盒|原廠盒|全配)', first)
     if box:
@@ -88,6 +119,7 @@ def parse_one(text: str) -> dict:
         if not re.match(r'^\$[\d,]+$', line):
             parts.append(line)
     out['condition'] = '  '.join(parts)
+
     return out
 
 
