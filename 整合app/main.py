@@ -15,6 +15,7 @@ BAR_BORDER = "#76736c"
 TOOLS = [
     ('combined',    '製作 & 報價', '#4a7fc1'),
     ('price_check', '價格稽核',    '#c14a4a'),
+    ('listing',     '自動上架',    '#c17a2a'),
     ('blog',        '部落格',      '#4ac14a'),
     ('settings',    '設定',        '#8888aa'),
 ]
@@ -77,6 +78,7 @@ class DesktopIcon(tk.Frame):
         fn = {
             'combined':    self._glyph_quote,
             'price_check': self._glyph_audit,
+            'listing':     self._glyph_listing,
             'blog':        self._glyph_blog,
             'settings':    self._glyph_settings,
         }.get(self._key)
@@ -110,6 +112,19 @@ class DesktopIcon(tk.Frame):
                          fill='#ffd060', outline='white', width=1)
         c.create_polygon(x2-9, y1+16, x2-1, y1+18, x2-2, y1+22, x2-10, y1+20,
                          fill='#444444', outline='')
+
+    def _glyph_listing(self, c, x1, y1, x2, y2):
+        # 上傳箭頭 + 購物車輪廓
+        mid = (x1 + x2) // 2
+        # Cart body
+        c.create_rectangle(x1+2, y1+14, x2-2, y2-4, outline='white', fill='', width=2)
+        # Upload arrow
+        c.create_line(mid, y1+2, mid, y1+12, fill='white', width=2)
+        c.create_line(mid-5, y1+7, mid, y1+2, fill='white', width=2)
+        c.create_line(mid+5, y1+7, mid, y1+2, fill='white', width=2)
+        # Wheels
+        c.create_oval(x1+5, y2-6, x1+11, y2, fill='white', outline='')
+        c.create_oval(x2-11, y2-6, x2-5, y2, fill='white', outline='')
 
     def _glyph_settings(self, c, x1, y1, x2, y2):
         # Three slider lines with knobs
@@ -342,6 +357,9 @@ class MacDesktop(tk.Tk):
         elif key == 'price_check':
             from pages.price_check_page import PriceCheckPage
             page = PriceCheckPage(win, config)
+        elif key == 'listing':
+            from pages.listing_page import ListingPage
+            page = ListingPage(win, config)
         elif key == 'blog':
             from pages.blog_page import BlogPage
             page = BlogPage(win, config)

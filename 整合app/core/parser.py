@@ -20,10 +20,19 @@ def _auto_warranty(model: str) -> str:
     return '30天'
 
 
+_DATE_RE = re.compile(r'^\d{1,2}[/\-]\d{1,2}([/\-]\d{2,4})?$')
+
+
 def parse_one(text: str) -> dict:
     lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
     out = dict(model='', capacity='', serial='', color='',
                battery='', condition='', warranty='')
+    if not lines:
+        return out
+
+    # 忽略開頭的日期行（如 06/26）
+    if _DATE_RE.match(lines[0]):
+        lines = lines[1:]
     if not lines:
         return out
 

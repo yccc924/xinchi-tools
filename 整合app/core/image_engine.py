@@ -33,6 +33,26 @@ def _font_bar(size: int) -> ImageFont.FreeTypeFont:
         return _font(size)
 
 
+def _bar_segments(text: str) -> list[tuple[str, bool]]:
+    """把文字拆成 (片段, 是否CJK) 清單，供混合字型渲染。"""
+    segments: list[tuple[str, bool]] = []
+    current = ''
+    current_cjk: bool | None = None
+    for ch in text:
+        cjk = '一' <= ch <= '鿿' or '㐀' <= ch <= '䶿' or '豈' <= ch <= '﫿'
+        if current_cjk is None:
+            current_cjk = cjk
+        if cjk == current_cjk:
+            current += ch
+        else:
+            segments.append((current, current_cjk))
+            current = ch
+            current_cjk = cjk
+    if current:
+        segments.append((current, current_cjk))
+    return segments
+
+
 def render(
     image_path: Path,
     warranty:   str,
@@ -114,15 +134,27 @@ def render(
     model_text   = f'{model.upper()} {capacity.upper()}'
     max_text_w   = 897
 
-    f_model = _font_bar(70)
+    segs = _bar_segments(model_text)
+
+    def _bar_total_w(size: int) -> int:
+        return sum(
+            draw.textbbox((0, 0), s, font=(_font(size) if cjk else _font_bar(size)), anchor='lt')[2]
+            for s, cjk in segs
+        )
+
+    total_w = 0
+    fsize   = 8
     for fsize in range(70, 8, -2):
-        f_model = _font_bar(fsize)
-        bbox = draw.textbbox((0, 0), model_text, font=f_model, anchor='lt')
-        if (bbox[2] - bbox[0]) <= max_text_w:
+        total_w = _bar_total_w(fsize)
+        if total_w <= max_text_w:
             break
 
-    draw.text((W // 2, bar_center_y), model_text,
-              font=f_model, fill=WHITE, anchor='mm')
+    x = W // 2 - total_w // 2
+    for seg, cjk in segs:
+        f   = _font(fsize) if cjk else _font_bar(fsize)
+        sw  = draw.textbbox((0, 0), seg, font=f, anchor='lt')[2]
+        draw.text((x, bar_center_y), seg, font=f, fill=WHITE, anchor='lm')
+        x  += sw
 
     jpg_path = output_path.with_suffix('.jpg')
     jpg_path.parent.mkdir(parents=True, exist_ok=True)

@@ -342,6 +342,12 @@ def install_edit_menu(root: tk.Tk, menubar: 'tk.Menu | None' = None):
         # Cmd+C → keysym='??'（macOS 攔截），改綁虛擬事件
         root.bind_all('<<Copy>>', do_copy)
 
+        # 虛擬事件備援：輸入法（注音/倉頡）可能攔截 <Meta-key>，
+        # 但系統仍會發出這些虛擬事件，確保快捷鍵不受輸入法影響
+        root.bind_all('<<SelectAll>>', do_select_all)
+        root.bind_all('<<Undo>>',      do_undo)
+        root.bind_all('<<Redo>>',      do_redo)
+
         # Cmd+X / A / Z / Shift+Z
         # 注意：Cmd+V 不綁，讓 tk.Text / Entry 原生 <<Paste>> class binding 處理，
         # 避免 <Meta-Key-v> 和 <<Paste>> 同時觸發導致 double paste

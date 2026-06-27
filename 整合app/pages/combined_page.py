@@ -23,6 +23,11 @@ if getattr(sys, 'frozen', False):
 else:
     OUTPUT_DIR = Path(__file__).parent.parent / 'output'
 
+DEFAULT_BRANDS = [
+    'IPHONE', 'IPAD', 'APPLE WATCH', 'SAMSUNG', 'XIAOMI',
+    'OPPO', 'VIVO', 'ASUS', 'SONY', 'HUAWEI', 'REALME',
+]
+
 
 def _pbcopy(text: str):
     if sys.platform == 'darwin':
@@ -37,10 +42,14 @@ def _pbcopy(text: str):
 class CombinedPage(tk.Frame):
     def __init__(self, master, config: dict, **kwargs):
         super().__init__(master, bg=WIN_BG, **kwargs)
-        self._images: list[Path] = []
-        self._price_db: dict     = {}
-        self._warranty_keys: set = set()
-        self._worker_running     = False
+        self._images: list[Path]       = []
+        self._price_db: dict           = {}
+        self._warranty_keys: set       = set()
+        self._worker_running           = False
+        # phase-1 結果暫存，供 phase-2 使用
+        self._parsed_cache: list       = []
+        self._raw_blocks_cache: list   = []
+        self._filled_blocks_cache: list = []
         self._build()
         if config.get('excel_path') and Path(config['excel_path']).exists():
             self._do_load_excel(config['excel_path'])
@@ -171,6 +180,7 @@ class CombinedPage(tk.Frame):
         result_outer, self._result_txt = w95_text(self._tab_price, readonly=True)
         result_outer.grid(row=2, column=0, sticky='nsew', padx=8, pady=(4, 8))
         attach(self._result_txt, readonly=True)
+        self._result_txt.tag_config('unknown', foreground='#cc3333')
 
         # Row 2: 狀態列
         self._lbl_status = tk.Label(self, text='', font=(_F, _FS),
@@ -242,66 +252,150 @@ class CombinedPage(tk.Frame):
                 text=f'⚠  機況 {nc} 筆 vs 圖片 {ni} 張，數量不符',
                 fg='#cc3333')
 
-    # ── 產生 ─────────────────────────────────────────────────────────────
+    # ── 產生（Phase 1：查報價） ──────────────────────────────────────────
 
     def _run(self):
+        """按鈕第一次按：查報價（Phase 1）。Phase 1 完成後按鈕變「開始做圖」。"""
         if self._worker_running:
             return
         self._worker_running = True
 
         raw_text = self._txt.get('1.0', 'end').strip()
         if not raw_text:
+            self._worker_running = False
             messagebox.showwarning('提醒', '請貼上機況文字')
             return
-        if not self._images:
-            messagebox.showwarning('提醒', '請選擇圖片')
-            return
-
         raw_blocks = [b for b in re.split(r'\n{2,}', raw_text) if b.strip()]
         parsed     = parse_all(raw_text)
 
-        if len(parsed) != len(self._images):
+        if not self._images:
+            messagebox.showwarning('提醒', '未選擇圖片，僅查詢報價，不會產生圖片')
+        elif len(parsed) != len(self._images):
+            self._worker_running = False
             messagebox.showwarning(
                 '數量不符',
                 f'機況 {len(parsed)} 筆，圖片 {len(self._images)} 張\n請確認數量一致')
             return
 
-        OUTPUT_DIR.mkdir(exist_ok=True)
+        # 快取供 Phase 2 使用
+        self._parsed_cache     = parsed
+        self._raw_blocks_cache = raw_blocks
+
         self._btn_run.configure(state='disabled')
-        self._lbl_run.configure(text='產生中… 0/' + str(len(self._images)), fg='#808080')
+        self._lbl_run.configure(text='查詢報價中…', fg='#808080')
 
-        # 把耗時的 render() 移到背景執行緒，完成後用 after() 推回主執行緒更新 UI
-        total      = len(self._images)
-        price_db   = dict(self._price_db)          # 背景執行緒用的快照
-        war_keys   = set(self._warranty_keys)
-        has_price  = bool(price_db)
+        price_db  = dict(self._price_db)
+        war_keys  = set(self._warranty_keys)
+        has_price = bool(price_db)
 
-        def _worker():
-            done = 0
-            err  = 0
+        def _price_worker():
             filled_blocks = []
-
-            for idx, (data, raw_block, img_path) in enumerate(
-                    zip(parsed, raw_blocks, self._images), start=1):
-
-                # ① 查報價（純計算，無 UI 操作）
+            for data, raw_block in zip(parsed, raw_blocks):
                 if price_db:
-                    header    = raw_block.split('\n')[0]
+                    _lines    = raw_block.split('\n')
+                    header    = next((l for l in _lines if not re.match(r'^\d{1,2}[/\-]\d{1,2}', l.strip())), _lines[0])
                     model_key = detect_model(header, price_db)
-                    cap_key   = re.sub(r'B$', '', data['capacity'].split('/')[-1], flags=re.IGNORECASE)
+                    cap_key   = re.sub(r'B$', '', data['capacity'].split('/')[-1],
+                                       flags=re.IGNORECASE)
                     price     = lookup_price(price_db, war_keys,
                                              model_key, cap_key,
                                              data['battery'], raw_block)
                     if isinstance(price, int):
                         filled = re.sub(r'^\$$', f'${price}', raw_block, flags=re.MULTILINE)
                     else:
-                        label  = f'查無 {model_key} {data["capacity"]}' if model_key != '未知' else '查無機型'
+                        label  = (f'查無 {model_key} {data["capacity"]}'
+                                  if model_key != '未知' else '查無機型')
                         filled = re.sub(r'^\$$', f'$ ({label})', raw_block, flags=re.MULTILINE)
                 else:
                     filled = raw_block
                 filled_blocks.append(filled)
 
-                # ② 產生圖片
+            try:
+                if self.winfo_exists():
+                    self.after(0, lambda: self._on_price_done(
+                        filled_blocks, parsed, has_price))
+            except tk.TclError:
+                pass
+
+        threading.Thread(target=_price_worker, daemon=True).start()
+
+    def _on_price_done(self, filled_blocks: list, parsed: list, has_price: bool):
+        """主執行緒回呼：Phase 1（報價）完成後更新 UI。"""
+        self._worker_running = False
+        try:
+            if not self.winfo_exists():
+                return
+
+            # 快取供 Phase 2 使用
+            self._filled_blocks_cache = filled_blocks
+
+            # 讀取品牌清單
+            brands = cfg.load().get('brands', DEFAULT_BRANDS)
+
+            # 填入報價結果
+            self._result_txt.configure(state='normal')
+            self._result_txt.delete('1.0', 'end')
+            for i, (filled, data) in enumerate(zip(filled_blocks, parsed)):
+                block_start = self._result_txt.index('end-1c')
+                self._result_txt.insert('end', filled)
+                if i < len(filled_blocks) - 1:
+                    self._result_txt.insert('end', '\n\n')
+
+                # 標紅：若 model 不以任何已知品牌開頭
+                model = data.get('model', '')
+                model_upper = model.upper()
+                is_unknown = model_upper and not any(
+                    model_upper.startswith(b) for b in brands
+                )
+                if is_unknown:
+                    # 標記該 block 第一行
+                    line_end = self._result_txt.search('\n', block_start, stopindex='end')
+                    if not line_end:
+                        line_end = self._result_txt.index('end-1c')
+                    self._result_txt.tag_add('unknown', block_start, line_end)
+
+            self._result_txt.configure(state='disabled')
+
+            msg = '報價查詢完成' + ('，已填入價格' if has_price else '（未載入報價單）')
+            self._lbl_run.configure(text=msg, fg='#2a8a2a')
+
+            # 有圖片才改為「開始做圖」，否則恢復「全部產生」
+            if self._images:
+                self._btn_run.configure(
+                    state='normal', text='開始做圖',
+                    command=self._start_render)
+            else:
+                self._btn_run.configure(
+                    state='normal', text='全部產生',
+                    command=self._run)
+
+            self._switch_tab(1)  # 自動跳到填寫報價頁籤
+        except tk.TclError:
+            pass
+
+    # ── 產生（Phase 2：做圖） ────────────────────────────────────────────
+
+    def _start_render(self):
+        """按鈕第二次按：批次 render 圖片（Phase 2）。"""
+        if self._worker_running:
+            return
+        if not self._images or not self._parsed_cache:
+            messagebox.showwarning('提醒', '請先執行「全部產生」查詢報價')
+            return
+        self._worker_running = True
+
+        OUTPUT_DIR.mkdir(exist_ok=True)
+        total  = len(self._images)
+        parsed = self._parsed_cache
+        images = list(self._images)
+
+        self._btn_run.configure(state='disabled')
+        self._lbl_run.configure(text=f'做圖中… 0/{total}', fg='#808080')
+
+        def _render_worker():
+            done = 0
+            err  = 0
+            for idx, (data, img_path) in enumerate(zip(parsed, images), start=1):
                 try:
                     out = OUTPUT_DIR / (img_path.stem + '.jpg')
                     render(image_path=img_path, output_path=out, **data)
@@ -310,48 +404,42 @@ class CombinedPage(tk.Frame):
                     err += 1
                     print(f'[圖片錯誤] {img_path.name}: {ex}')
 
-                # 每張完成後即時更新進度標籤（推回主執行緒）
-                progress_text = f'產生中… {idx}/{total}'
+                progress_text = f'做圖中… {idx}/{total}'
                 try:
                     if self.winfo_exists():
-                        self.after(0, lambda t=progress_text: self._safe_set_lbl_run(t, '#808080'))
+                        self.after(0, lambda t=progress_text:
+                                   self._safe_set_lbl_run(t, '#808080'))
                 except tk.TclError:
                     pass
 
-            # 全部完成 → 推回主執行緒做最終 UI 更新
-            result_text = '\n\n'.join(filled_blocks)
             try:
                 if self.winfo_exists():
-                    self.after(0, lambda: self._on_done(result_text, done, err, has_price))
+                    self.after(0, lambda: self._on_render_done(done, err))
             except tk.TclError:
                 pass
 
-        threading.Thread(target=_worker, daemon=True).start()
+        threading.Thread(target=_render_worker, daemon=True).start()
+
+    def _on_render_done(self, done: int, err: int):
+        """主執行緒回呼：Phase 2（做圖）完成後更新 UI。"""
+        self._worker_running = False
+        try:
+            if not self.winfo_exists():
+                return
+            msg = f'完成 {done} 張圖片' + (f'（失敗 {err} 張）' if err else '')
+            self._lbl_run.configure(
+                text=msg, fg='#2a8a2a' if not err else '#cc3333')
+            # 恢復按鈕為「全部產生」，準備下一輪
+            self._btn_run.configure(
+                state='normal', text='全部產生', command=self._run)
+        except tk.TclError:
+            pass
 
     def _safe_set_lbl_run(self, text: str, color: str):
         """主執行緒回呼：安全地更新進度標籤。"""
         try:
             if self.winfo_exists():
                 self._lbl_run.configure(text=text, fg=color)
-        except tk.TclError:
-            pass
-
-    def _on_done(self, result_text: str, done: int, err: int, has_price: bool):
-        """主執行緒回呼：背景執行緒全部完成後更新 UI。"""
-        self._worker_running = False
-        try:
-            if not self.winfo_exists():
-                return
-            self._result_txt.configure(state='normal')
-            self._result_txt.delete('1.0', 'end')
-            self._result_txt.insert('1.0', result_text)
-            self._result_txt.configure(state='disabled')
-
-            msg = f'完成 {done} 張圖片' + ('，已填入價格' if has_price else '') + (f'（失敗 {err} 張）' if err else '')
-            self._lbl_run.configure(text=msg, fg='#2a8a2a' if not err else '#cc3333')
-            self._btn_run.configure(state='normal')
-
-            self._switch_tab(1)  # 自動跳到填寫報價頁籤顯示結果
         except tk.TclError:
             pass
 
